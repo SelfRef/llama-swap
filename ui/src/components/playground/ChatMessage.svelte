@@ -27,8 +27,8 @@
     /**
      * Stats of the request this message belongs to: for an assistant message
      * its own turn, for a user message the turn it prompted. Prompt processing
-     * is shown under the user message, thinking in the Reasoning header, and
-     * the answer under the reply.
+     * is shown under the user message, reasoning in the Reasoning header, and
+     * the response under the reply.
      */
     stats?: GenerationStats;
     /** That request is still in flight, so the stats are updating. */
@@ -212,7 +212,7 @@
             <Brain class="size-4" />
             <span class="font-medium">Reasoning</span>
             {#if stats?.reasoning}
-              <MessageStats phase={stats.reasoning} kind="thinking" class="ml-2 font-normal" />
+              <MessageStats phase={stats.reasoning} kind="reasoning" class="ml-2 font-normal" />
             {:else}
               <span class="text-muted-foreground ml-2">
                 ({reasoning_content.length} chars{#if !isReasoning && reasoningTimeMs > 0}, {formatDuration(reasoningTimeMs, { precision: 1, subSecondMs: true })}{/if})

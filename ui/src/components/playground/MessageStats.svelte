@@ -6,7 +6,7 @@
 
   /**
    * One line of token / time / speed for a single phase of a turn: prompt
-   * processing under the user message, thinking in the Reasoning header, and
+   * processing under the user message, reasoning in the Reasoning header, and
    * the generation under the reply, mirroring llama.cpp's web UI. Every value
    * carries its own tooltip saying what it measures.
    */

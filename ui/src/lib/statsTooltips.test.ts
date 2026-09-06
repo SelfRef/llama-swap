@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { phaseValueTooltip, type PhaseKind, type PhaseMetric } from "./statsTooltips";
 
-const kinds: PhaseKind[] = ["prompt", "thinking", "answer", "generation"];
+const kinds: PhaseKind[] = ["prompt", "reasoning", "response", "generation"];
 const metrics: PhaseMetric[] = ["tokens", "time", "speed", "perToken"];
 
 describe("statsTooltips", () => {
@@ -17,9 +17,9 @@ describe("statsTooltips", () => {
 
   it("explains the ~ on estimated values", () => {
     const approx = { approxTokens: true, approxTimings: true };
-    expect(phaseValueTooltip("thinking", "tokens", approx)).toMatch(/~ Estimated.*split/);
+    expect(phaseValueTooltip("reasoning", "tokens", approx)).toMatch(/~ Estimated.*split/);
     expect(phaseValueTooltip("generation", "tokens", approx)).toMatch(/~ Estimated from streamed chunks/);
     expect(phaseValueTooltip("prompt", "time", approx)).toMatch(/first token.*browser/);
-    expect(phaseValueTooltip("answer", "speed", approx)).toMatch(/~ Derived/);
+    expect(phaseValueTooltip("response", "speed", approx)).toMatch(/~ Derived/);
   });
 });

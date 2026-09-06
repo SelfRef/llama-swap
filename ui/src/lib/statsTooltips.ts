@@ -1,27 +1,27 @@
 import type { PhaseStats } from "./types";
 
 /** The phases a stats line can describe. */
-export type PhaseKind = "prompt" | "thinking" | "answer" | "generation";
+export type PhaseKind = "prompt" | "reasoning" | "response" | "generation";
 
 export type PhaseMetric = "tokens" | "time" | "speed" | "perToken";
 
 export const PHASE_LABEL: Record<PhaseKind, string> = {
   prompt: "Prompt",
-  thinking: "Thinking",
-  answer: "Answer",
+  reasoning: "Reasoning",
+  response: "Response",
   generation: "Generation",
 };
 
 /** One-line description of a phase, for its row label. */
 export const PHASE_TOOLTIP: Record<PhaseKind, string> = {
   prompt: "Prompt processing: reading everything sent to the model for this turn before it can generate.",
-  thinking: "Thinking: the reasoning the model produced before starting its answer.",
-  answer: "Answer: the visible reply, after any thinking.",
-  generation: "Generation: everything the model produced for this turn, thinking and answer together.",
+  reasoning: "Reasoning: what the model produced before starting its response.",
+  response: "Response: the visible reply, after any reasoning.",
+  generation: "Generation: everything the model produced for this turn, reasoning and response together.",
 };
 
 const SPLIT_NOTE =
-  " ~ Estimated: the backend reports one total for the whole generation; it is split between thinking and answer by streamed chunks, and the boundary is the first answer token.";
+  " ~ Estimated: the backend reports one total for the whole generation; it is split between reasoning and response by streamed chunks, and the boundary is the first response token.";
 const CHUNK_NOTE = " ~ Estimated from streamed chunks until the backend reports the count.";
 const BROWSER_NOTE = " ~ Measured in the browser, not by the backend.";
 
@@ -33,12 +33,12 @@ export function phaseValueTooltip(kind: PhaseKind, metric: PhaseMetric, phase: P
       switch (kind) {
         case "prompt":
           return "Prompt tokens: everything sent to the model for this turn (system prompt, history and message), including tokens reused from the cache.";
-        case "thinking":
-          return "Thinking tokens: reasoning produced before the answer." + (phase.approxTokens ? SPLIT_NOTE : "");
-        case "answer":
-          return "Answer tokens: the visible reply." + (phase.approxTokens ? SPLIT_NOTE : "");
+        case "reasoning":
+          return "Reasoning tokens: produced before the response." + (phase.approxTokens ? SPLIT_NOTE : "");
+        case "response":
+          return "Response tokens: the visible reply." + (phase.approxTokens ? SPLIT_NOTE : "");
         case "generation":
-          return "Generated tokens: thinking and answer together." + (phase.approxTokens ? CHUNK_NOTE : "");
+          return "Generated tokens: reasoning and response together." + (phase.approxTokens ? CHUNK_NOTE : "");
       }
       break;
     case "time":
@@ -47,14 +47,14 @@ export function phaseValueTooltip(kind: PhaseKind, metric: PhaseMetric, phase: P
           return phase.approxTimings
             ? "Time to first token, measured in the browser: covers queueing, model loading and prompt processing."
             : "Prefill time: how long the backend took to process the prompt tokens that were not already cached.";
-        case "thinking":
-          return "Thinking time: from the first thinking token to the first answer token." + (phase.approxTimings ? BROWSER_NOTE : "");
-        case "answer":
-          return "Answer time: from the first answer token to the last one." + (phase.approxTimings ? BROWSER_NOTE : "");
+        case "reasoning":
+          return "Reasoning time: from the first reasoning token to the first response token." + (phase.approxTimings ? BROWSER_NOTE : "");
+        case "response":
+          return "Response time: from the first response token to the last one." + (phase.approxTimings ? BROWSER_NOTE : "");
         case "generation":
           return phase.approxTimings
             ? "Generation time: from the first to the last streamed token, measured in the browser."
-            : "Generation time: how long the backend spent producing tokens, thinking and answer together.";
+            : "Generation time: how long the backend spent producing tokens, reasoning and response together.";
       }
       break;
     case "speed":
@@ -64,10 +64,10 @@ export function phaseValueTooltip(kind: PhaseKind, metric: PhaseMetric, phase: P
             "Prefill speed: prompt tokens processed per second, counting only the tokens not served from the cache." +
             (phase.approxTimings ? " ~ Based on the browser-measured time to first token." : "")
           );
-        case "thinking":
-          return "Thinking speed: reasoning tokens generated per second." + (approxSpeed ? " ~ Derived from estimated values." : "");
-        case "answer":
-          return "Answer speed: reply tokens generated per second." + (approxSpeed ? " ~ Derived from estimated values." : "");
+        case "reasoning":
+          return "Reasoning speed: reasoning tokens generated per second." + (approxSpeed ? " ~ Derived from estimated values." : "");
+        case "response":
+          return "Response speed: reply tokens generated per second." + (approxSpeed ? " ~ Derived from estimated values." : "");
         case "generation":
           return "Generation speed: tokens generated per second over the whole turn." + (approxSpeed ? " ~ Derived from estimated values." : "");
       }

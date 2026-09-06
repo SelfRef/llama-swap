@@ -8,7 +8,7 @@
    * throughput and time per token, then the details a benchmark cares about
    * (cache hits, draft acceptance, time to first token, context use, stop
    * reason). Backend-reported values are exact; browser measurements and the
-   * thinking/answer split carry a ~.
+   * reasoning/response split carry a ~.
    */
   interface Props {
     stats: GenerationStats;
@@ -33,8 +33,8 @@
       processed: stats.prompt.tokens !== undefined && cached > 0 ? stats.prompt.tokens - cached : undefined,
     });
     if (stats.reasoning && stats.answer) {
-      out.push({ kind: "thinking", phase: stats.reasoning });
-      out.push({ kind: "answer", phase: stats.answer });
+      out.push({ kind: "reasoning", phase: stats.reasoning });
+      out.push({ kind: "response", phase: stats.answer });
     }
     out.push({ kind: "generation", phase: stats.generation });
     return out;

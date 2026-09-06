@@ -330,6 +330,11 @@ export interface GenerationStats {
   wallMs?: number;
   /** The backend's finish_reason: "stop", "length", "tool_calls", ... */
   finishReason?: string;
+  /**
+   * Context window of the model that served the turn, captured when the turn
+   * started so the number stays put when a different model is selected later.
+   */
+  contextLength?: number;
 }
 
 export interface ChatMessage {

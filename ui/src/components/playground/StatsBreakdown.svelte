@@ -12,11 +12,10 @@
    */
   interface Props {
     stats: GenerationStats;
-    /** The model's context window, to show how much of it the turn used. */
-    contextLength?: number;
   }
 
-  let { stats, contextLength }: Props = $props();
+  let { stats }: Props = $props();
+  let contextLength = $derived(stats.contextLength);
 
   interface Row {
     kind: PhaseKind;

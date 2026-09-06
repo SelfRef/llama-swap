@@ -22,10 +22,12 @@ export interface GenerationTracker {
   finishReason?: string;
   /** The user stopped the turn, so no backend finish_reason will arrive. */
   cancelled?: boolean;
+  /** Context window of the model the request went to, if known. */
+  contextLength?: number;
 }
 
-export function startTracking(now: number): GenerationTracker {
-  return { startedAt: now, reasoningChunks: 0, answerChunks: 0, usage: {} };
+export function startTracking(now: number, contextLength?: number): GenerationTracker {
+  return { startedAt: now, reasoningChunks: 0, answerChunks: 0, usage: {}, contextLength };
 }
 
 /** Folds one streamed chunk into the tracker. */
@@ -113,6 +115,7 @@ export function currentStats(tracker: GenerationTracker, now: number, streaming:
   } else if (tracker.cancelled) {
     stats.finishReason = "cancelled";
   }
+  if (tracker.contextLength) stats.contextLength = tracker.contextLength;
   if (reasoningChunks === 0 || firstTokenAt === undefined) return stats;
 
   // Still thinking, or the turn ended without an answer: thinking is all of it.

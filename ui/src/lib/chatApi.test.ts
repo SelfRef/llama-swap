@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildRequest, parseChatCompletionsLine, type ChatOptions, type ToolDefinition } from "./chatApi";
+import {
+  buildRequest,
+  normalizeAnthropicStopReason,
+  normalizeResponsesStop,
+  parseChatCompletionsLine,
+  type ChatOptions,
+  type ToolDefinition,
+} from "./chatApi";
 import type { ChatMessage, ToolCall } from "./types";
 
 const sse = (payload: unknown) => `data: ${JSON.stringify(payload)}`;
@@ -254,5 +261,27 @@ describe("buildRequest for the text-only endpoints", () => {
   it("still extracts the system prompt", () => {
     const body = buildRequest("v1/messages", "m", history, {}).body as any;
     expect(body.system).toBe("be helpful");
+  });
+});
+
+describe("stop reason normalization", () => {
+  it("maps Anthropic stop reasons onto the OpenAI vocabulary", () => {
+    expect(normalizeAnthropicStopReason("end_turn")).toBe("stop");
+    expect(normalizeAnthropicStopReason("stop_sequence")).toBe("stop");
+    expect(normalizeAnthropicStopReason("max_tokens")).toBe("length");
+    expect(normalizeAnthropicStopReason("tool_use")).toBe("tool_calls");
+    expect(normalizeAnthropicStopReason("refusal")).toBe("refusal"); // unknown ones pass through
+    expect(normalizeAnthropicStopReason(null)).toBeUndefined();
+    expect(normalizeAnthropicStopReason("")).toBeUndefined();
+  });
+
+  it("maps Responses terminal events onto the OpenAI vocabulary", () => {
+    expect(normalizeResponsesStop("response.completed", { status: "completed" })).toBe("stop");
+    expect(normalizeResponsesStop("response.incomplete", { incomplete_details: { reason: "max_output_tokens" } })).toBe("length");
+    expect(normalizeResponsesStop("response.incomplete", { incomplete_details: { reason: "content_filter" } })).toBe("content_filter");
+    expect(normalizeResponsesStop("response.incomplete", {})).toBe("incomplete");
+    expect(normalizeResponsesStop("response.completed", { status: "incomplete", incomplete_details: { reason: "max_output_tokens" } })).toBe("length");
+    expect(normalizeResponsesStop("response.failed", {})).toBe("error");
+    expect(normalizeResponsesStop("response.output_text.delta", {})).toBeUndefined();
   });
 });

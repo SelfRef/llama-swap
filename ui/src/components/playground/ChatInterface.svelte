@@ -67,7 +67,17 @@
   let imageError = $state<string | null>(null);
 
   let userScrolledUp = $state(false);
-  let selectedContextLength = $derived($playgroundModels.find((m) => m.id === $selectedModelStore)?.context_length);
+
+  /**
+   * Context window of the model the next request goes to. Looked up when the
+   * turn starts and stored with its stats, so a later switch of the dropdown
+   * does not rewrite older turns. The selector also offers aliases, which are
+   * not model entries themselves, so those resolve through their model.
+   */
+  function selectedContextLength(): number | undefined {
+    const id = $selectedModelStore;
+    return $playgroundModels.find((m) => m.id === id || m.aliases?.includes(id))?.context_length;
+  }
 
   $effect(() => {
     playgroundStores.chatStreaming.set(isStreaming);
@@ -242,7 +252,7 @@
 
     // Stats are refreshed on every chunk and, so the clocks keep moving while
     // the backend is quiet (prompt processing, a slow token), on a timer too.
-    const tracker = startTracking(performance.now());
+    const tracker = startTracking(performance.now(), selectedContextLength());
     const ticker = window.setInterval(() => {
       patchLast({ stats: currentStats(tracker, performance.now(), true) });
     }, 200);
@@ -459,7 +469,6 @@
             isReasoning={isReasoning && idx === messages.length - 1 && message.role === "assistant"}
             stats={statsFor(idx)}
             statsLive={statsLiveFor(idx)}
-            contextLength={selectedContextLength}
             onEdit={message.role === "user" ? (newContent) => editMessage(idx, newContent) : undefined}
             onRegenerate={message.role === "assistant" && idx > 0 && messages[idx - 1].role === "user"
               ? () => regenerateFromIndex(idx - 1)

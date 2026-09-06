@@ -279,6 +279,41 @@ function parseTimingsObject(timings: unknown): StreamUsage | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
+/**
+ * Maps an Anthropic `stop_reason` onto the OpenAI finish_reason vocabulary
+ * the stats use, so every endpoint reports why a turn ended the same way.
+ */
+export function normalizeAnthropicStopReason(reason: unknown): string | undefined {
+  if (typeof reason !== "string" || !reason) return undefined;
+  switch (reason) {
+    case "end_turn":
+    case "stop_sequence":
+      return "stop";
+    case "max_tokens":
+      return "length";
+    case "tool_use":
+      return "tool_calls";
+    default:
+      return reason;
+  }
+}
+
+/**
+ * Maps a Responses API terminal event (`response.completed`, `.incomplete`,
+ * `.failed`) and the response object it carries onto a finish_reason.
+ */
+export function normalizeResponsesStop(event: string, response: unknown): string | undefined {
+  const r = (response && typeof response === "object" ? response : {}) as Record<string, unknown>;
+  const details = r.incomplete_details as Record<string, unknown> | undefined;
+  if (event === "response.incomplete" || r.status === "incomplete") {
+    if (details?.reason === "max_output_tokens") return "length";
+    return typeof details?.reason === "string" ? details.reason : "incomplete";
+  }
+  if (event === "response.failed" || r.status === "failed") return "error";
+  if (event === "response.completed") return "stop";
+  return undefined;
+}
+
 // Exported for tests.
 export function parseChatCompletionsLine(line: string): StreamChunk | null {
   const trimmed = line.trim();
@@ -386,10 +421,13 @@ async function* parseMessagesStream(
       if (!parsed.data) continue;
       try {
         const json = JSON.parse(parsed.data);
-        // Input tokens arrive on message_start, output tokens on message_delta.
+        // Input tokens arrive on message_start; output tokens and the stop
+        // reason on message_delta.
         if (parsed.event === "message_start" || parsed.event === "message_delta") {
           const usage = parseUsageObject(parsed.event === "message_start" ? json.message?.usage : json.usage);
-          if (usage) yield { content: "", usage, done: false };
+          const finish_reason =
+            parsed.event === "message_delta" ? normalizeAnthropicStopReason(json.delta?.stop_reason) : undefined;
+          if (usage || finish_reason) yield { content: "", usage, finish_reason, done: false };
           continue;
         }
         if (parsed.event !== "content_block_delta") continue;
@@ -427,9 +465,14 @@ async function* parseResponsesStream(
       if (!parsed.data) continue;
       try {
         const json = JSON.parse(parsed.data);
-        if (parsed.event === "response.completed") {
+        if (
+          parsed.event === "response.completed" ||
+          parsed.event === "response.incomplete" ||
+          parsed.event === "response.failed"
+        ) {
           const usage = parseUsageObject(json.response?.usage);
-          if (usage) yield { content: "", usage, done: false };
+          const finish_reason = normalizeResponsesStop(parsed.event, json.response);
+          if (usage || finish_reason) yield { content: "", usage, finish_reason, done: false };
           yield { content: "", done: true };
           return;
         }
@@ -463,10 +506,12 @@ function parseStream(
 /**
  * Whether to keep asking for per-chunk timings. The parameter is a llama.cpp
  * extension, so a backend that validates its request body strictly answers
- * 400. The first such rejection turns it off for the rest of the session and
- * the request is retried without it.
+ * 400 and names the field. The first such rejection turns it off for the
+ * rest of the session and the request is retried without it. A 400 that does
+ * not mention the field is an ordinary error and is reported as one.
  */
 let perTokenTimingsWanted = true;
+const PER_TOKEN_TIMINGS_FIELD = "timings_per_token";
 
 export async function* streamChatCompletion(
   model: string,
@@ -491,16 +536,17 @@ export async function* streamChatCompletion(
   const askedForTimings = perTokenTimingsWanted && endpoint === "v1/chat/completions";
   let response = await send(askedForTimings);
 
-  // A 400 on the one request that carried the extension is taken to be about
-  // the extension: drop it and try once more, plainly.
-  if (!response.ok && response.status === 400 && askedForTimings) {
-    perTokenTimingsWanted = false;
-    response = await send(false);
-  }
-
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Chat API error: ${response.status} - ${errorText}`);
+    const rejectedExtension = response.status === 400 && askedForTimings && errorText.includes(PER_TOKEN_TIMINGS_FIELD);
+    if (!rejectedExtension) {
+      throw new Error(`Chat API error: ${response.status} - ${errorText}`);
+    }
+    perTokenTimingsWanted = false;
+    response = await send(false);
+    if (!response.ok) {
+      throw new Error(`Chat API error: ${response.status} - ${await response.text()}`);
+    }
   }
 
   const reader = response.body?.getReader();

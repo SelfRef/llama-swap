@@ -215,6 +215,14 @@ describe("generationStats", () => {
     });
   });
 
+  // The dropdown can change after a turn; the turn keeps the window it ran in.
+  it("carries the context window the turn was started with", () => {
+    const t = startTracking(0, 32768);
+    trackChunk(t, text("a"), 100);
+    expect(currentStats(t, 100, false).contextLength).toBe(32768);
+    expect(currentStats(startTracking(0), 100, false).contextLength).toBeUndefined();
+  });
+
   it("computes tokens per second only when it is meaningful", () => {
     expect(tokensPerSecond(50, 2000)).toBe(25);
     expect(tokensPerSecond(undefined, 2000)).toBeUndefined();

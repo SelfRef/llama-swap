@@ -1,8 +1,9 @@
 <script lang="ts">
   import { get } from "svelte/store";
-  import { hasListedModels } from "../../stores/api";
+  import { hasListedModels, playgroundModels } from "../../stores/api";
   import { persistentStore } from "../../stores/persistent";
   import { streamChatCompletion, type Endpoint } from "../../lib/chatApi";
+  import { currentStats, markCancelled, startTracking, trackChunk } from "../../lib/generationStats";
   import { DOCS_AGENT_SYSTEM_PROMPT } from "../../lib/prompts/docsAgent";
   import { playgroundStores } from "../../stores/playgroundActivity";
   import type { ChatMessage, ContentPart } from "../../lib/types";
@@ -66,6 +67,7 @@
   let imageError = $state<string | null>(null);
 
   let userScrolledUp = $state(false);
+  let selectedContextLength = $derived($playgroundModels.find((m) => m.id === $selectedModelStore)?.context_length);
 
   $effect(() => {
     playgroundStores.chatStreaming.set(isStreaming);
@@ -209,6 +211,23 @@
     return out;
   }
 
+  /**
+   * The stats a message is shown with. An assistant turn carries its own; a
+   * user message borrows the turn it prompted, so its prompt-processing line
+   * sits right under it.
+   */
+  function statsFor(idx: number) {
+    const msg = messages[idx];
+    if (msg.role === "assistant") return msg.stats;
+    const next = messages[idx + 1];
+    return next?.role === "assistant" ? next.stats : undefined;
+  }
+
+  /** True for the streaming assistant turn and the user message that prompted it. */
+  function statsLiveFor(idx: number) {
+    return isStreaming && idx >= messages.length - 2;
+  }
+
   async function regenerateFromIndex(idx: number) {
     // Remove all messages after the edited user message
     messages = messages.slice(0, idx + 1);
@@ -221,6 +240,13 @@
     reasoningStartTime = 0;
     abortController = new AbortController();
 
+    // Stats are refreshed on every chunk and, so the clocks keep moving while
+    // the backend is quiet (prompt processing, a slow token), on a timer too.
+    const tracker = startTracking(performance.now());
+    const ticker = window.setInterval(() => {
+      patchLast({ stats: currentStats(tracker, performance.now(), true) });
+    }, 200);
+
     try {
       const stream = streamChatCompletion(
         $selectedModelStore,
@@ -230,13 +256,19 @@
       );
 
       for await (const chunk of stream) {
+        const now = performance.now();
+        trackChunk(tracker, chunk, now);
         if (chunk.done) break;
         if (chunk.reasoning_content) appendDelta("reasoning", chunk.reasoning_content);
         if (chunk.content) appendDelta("content", chunk.content);
+        patchLast({ stats: currentStats(tracker, now, true) });
       }
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") markCancelled(tracker);
       handleTurnError(error);
     } finally {
+      window.clearInterval(ticker);
+      patchLast({ stats: currentStats(tracker, performance.now(), false) });
       isStreaming = false;
       isReasoning = false;
       abortController = null;
@@ -425,6 +457,9 @@
             reasoningTimeMs={message.reasoningTimeMs}
             isStreaming={isStreaming && idx === messages.length - 1 && message.role === "assistant"}
             isReasoning={isReasoning && idx === messages.length - 1 && message.role === "assistant"}
+            stats={statsFor(idx)}
+            statsLive={statsLiveFor(idx)}
+            contextLength={selectedContextLength}
             onEdit={message.role === "user" ? (newContent) => editMessage(idx, newContent) : undefined}
             onRegenerate={message.role === "assistant" && idx > 0 && messages[idx - 1].role === "user"
               ? () => regenerateFromIndex(idx - 1)
